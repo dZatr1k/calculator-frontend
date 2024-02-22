@@ -1,0 +1,51 @@
+<template>
+  <div class="d-flex align-center justify-center h-100">
+    <v-card max-width="400" width="100%" variant="text">
+      <v-card-title>
+        💪🏽 Вход в панель админа 💪🏽
+      </v-card-title>
+      <v-form @submit.prevent="login" :disabled="isLoading">
+        <v-text-field v-model="username" label="Введите имя">
+
+        </v-text-field>
+        <v-text-field
+          :append-inner-icon="isPasswordShowed ? 'mdi-eye' : 'mdi-eye-off'"
+          :type="isPasswordShowed ? 'text' : 'password'"
+          v-model="password"
+          label="Введите пароль"
+          @click:append-inner="isPasswordShowed = !isPasswordShowed">
+        </v-text-field>
+        <v-btn
+          :loading="isLoading"
+          :disabled="password.length < 3 || username.length < 3"
+          type="submit" color="primary" class="mt-2" block="true" variant="tonal" size="x-large">
+          Войти
+        </v-btn>
+      </v-form>
+    </v-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import {ref} from "vue";
+import {useCalculatorStore} from "@/store/app"
+import {useRoute, useRouter} from "vue-router";
+
+const store = useCalculatorStore()
+const route = useRoute()
+const router = useRouter()
+
+const password = ref('')
+const username = ref('')
+const isPasswordShowed = ref(false)
+const isLoading = ref(false)
+
+const login = async () => {
+  isLoading.value = true;
+  if (await store.setAuthData({login: username.value, password: password.value})) {
+    const redirect = <string>(route.query['redirect'] ?? '/admin')
+    await router.push({ path: redirect })
+  }
+  isLoading.value = false
+}
+</script>
