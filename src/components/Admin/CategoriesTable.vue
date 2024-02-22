@@ -7,55 +7,76 @@ import {
 } from "@/restAPI";
 import "../../restAPI/apis/DefaultApi";
 import {handleError, useCalculatorStore} from "@/store/app";
+import {useFormSchema} from "@/forms";
+import * as yup from "yup";
+import {InferType, Schema} from "yup";
+import {FieldContext, useField} from "vee-validate";
 
 const loadingDialog = ref(false)
 
-interface EditingCategory {
+const {form, formData, schema} = useFormSchema(yup.object({
+  name: yup.string()
+    .trim()
+    .required('sosi'),
+  level: yup.number()
+    .integer()
+    .min(1)
+    .required('sosi'),
+  minCombo: yup.number()
+    .integer()
+    .min(1)
+    .required('sosi'),
+  minElementsOfSameLevel: yup.number()
+    .integer()
+    .min(1)
+    .required('sosi'),
+  minFemaleScore: yup.number()
+    .integer()
+    .min(1)
+    .required('sosi'),
+  minMaleScore: yup.number()
+    .integer()
+    .min(1)
+    .required('sosi'),
+}))
+const {handleSubmit} = form
+
+interface EditorState {
   id: number | null,
-  name: string,
-  level: number,
-  minCombo: number,
-  minElementsOfSameLevel: number,
-  minFemaleScore: number,
-  minMaleScore: number,
+  initialExerciseRequirementIds: number[],
   exerciseRequirementIds: number[],
-  exerciseRequirements: Record<number, number>
+  exerciseRequirements: Record<number, number>,
 }
-
-const initialState: EditingCategory = {
-  id: null,
-  name: '',
-  level: 0,
-  minCombo: 0,
-  minElementsOfSameLevel: 0,
-  minFemaleScore: 0,
-  minMaleScore: 0,
+const initialEditorState: EditorState = {
+  id: 0,
+  initialExerciseRequirementIds: [],
   exerciseRequirementIds: [],
-  exerciseRequirements: {}
+  exerciseRequirements: {},
 }
 
-const editedItem = reactive<EditingCategory>({...initialState})
-const constEditedItem = reactive<EditingCategory>({...initialState})
+const editorState = reactive<EditorState>({...initialEditorState})
 
 const editItem = (item: CategoryResponse) => {
-  item.exerciseRequirements
-  let subItem = {
-    id: item.id,
-    name: item.name,
-    level: item.level,
-    minCombo: item.requirements.minCombo,
-    minElementsOfSameLevel: item.requirements.minElementsOfSameLevel,
-    minFemaleScore: item.requirements.minFemaleScore,
-    minMaleScore: item.requirements.minMaleScore,
-    exerciseRequirementIds: item.exerciseRequirements.map(it => it.exercise.id),
-    exerciseRequirements: Object.fromEntries(item.exerciseRequirements.map(it => [it.exercise.id, it.count]))
-  }
-  Object.assign(editedItem, subItem);
-  Object.assign(constEditedItem, subItem);
+  formData.name.value.value = item.name
+  formData.level.value.value = item.level
+  formData.minCombo.value.value = item.requirements.minCombo
+  formData.minElementsOfSameLevel.value.value = item.requirements.minElementsOfSameLevel
+  formData.minFemaleScore.value.value = item.requirements.minFemaleScore
+  formData.minMaleScore.value.value = item.requirements.minMaleScore
+
+  editorState.id = item.id
+  editorState.initialExerciseRequirementIds = item.exerciseRequirements.map(it => it.exercise.id)
+  editorState.exerciseRequirementIds = item.exerciseRequirements.map(it => it.exercise.id)
+  editorState.exerciseRequirements = Object.fromEntries(item.exerciseRequirements.map(it => {
+    return [it.exercise.id, it.count];
+  }))
+
+  console.info(editorState.exerciseRequirements)
+
   dialog.value = true
 };
 
-const isEditing = computed(() => editedItem.id !== null)
+const isEditing = computed(() => editorState.id !== null)
 
 const deleteItem = async (item: CategoryResponse) => {
   await api?.adminDeleteCategory({
@@ -66,37 +87,53 @@ const deleteItem = async (item: CategoryResponse) => {
 }
 
 const createItem = () => {
-  Object.assign(editedItem, initialState)
+  formData.name.value.value = ''
+  formData.level.value.value = 1
+  formData.minCombo.value.value = 1
+  formData.minElementsOfSameLevel.value.value = 1
+  formData.minFemaleScore.value.value = 1
+  formData.minMaleScore.value.value = 1
+
+  Object.assign(editorState, initialEditorState)
+
   dialog.value = true
 }
 
 const updateExerciseRequirementIds = (value: number[]) => {
   for (const id of value) {
-    if (!(id in editedItem.exerciseRequirements)) {
-      editedItem.exerciseRequirements[id] = 1
+    if (!(id in editorState.exerciseRequirements)) {
+      editorState.exerciseRequirements[id] = 1
     }
   }
-  editedItem.exerciseRequirementIds = value
+  editorState.exerciseRequirementIds = value
 }
 
-const save = async () => {
+const save = handleSubmit(async rawValues => {
+  const values = schema.cast(rawValues)
+
+  // Array.from(Object.values(editorState.exerciseRequirements)).map(async it => {
+  //   await it.validate()
+  //   console.log(it.value.value)
+  //   console.log(await it.validate())
+  // })
+
   loadingDialog.value = true
   try {
     const requestBody: CategoryRequest = {
-      name: editedItem.name,
-      level: editedItem.level,
+      name: values.name,
+      level: values.level,
       requirements: {
-        minMaleScore: editedItem.minMaleScore,
-        minFemaleScore: editedItem.minFemaleScore,
-        minElementsOfSameLevel: editedItem.minElementsOfSameLevel,
-        minCombo: editedItem.minCombo
+        minMaleScore: values.minMaleScore,
+        minFemaleScore: values.minFemaleScore,
+        minElementsOfSameLevel: values.minElementsOfSameLevel,
+        minCombo: values.minCombo
       }
     }
 
     let response: CategoryResponse
     if (isEditing.value) {
       response = await api.adminUpdateCategory({
-        categoryId: editedItem.id!,
+        categoryId: editorState.id!,
         categoryRequest: requestBody
       })
     } else {
@@ -104,23 +141,23 @@ const save = async () => {
         categoryRequest: requestBody
       })
     }
-    let newIds = new Set(editedItem.exerciseRequirementIds)
-    let toDeleteIds = constEditedItem.exerciseRequirementIds.filter(x => !newIds.has(x))
+    let newIds = new Set(editorState.exerciseRequirementIds)
+    let toDeleteIds = editorState.initialExerciseRequirementIds.filter(x => !newIds.has(x))
 
     await Promise.all(toDeleteIds.map(x => {
-      delete editedItem.exerciseRequirements[x]
+      delete editorState.exerciseRequirements[x]
       return api?.adminDeleteExerciseRequirement({
         categoryId: response.id,
         exerciseId: x
       })
     }))
 
-    await Promise.all(Object.entries(editedItem.exerciseRequirements).map(([exerciseId, count]) => {
+    await Promise.all(Object.entries(editorState.exerciseRequirements).map(([exerciseId, count]) => {
       return api?.adminSetExerciseRequirement({
         categoryId: response.id,
-        exerciseId: Number(exerciseId),
+        exerciseId,
         categoryExerciseRequirementRequest: {
-          count: Number(count)
+          count
         }
       })
     }))
@@ -133,7 +170,7 @@ const save = async () => {
   } finally {
     loadingDialog.value = false
   }
-}
+})
 
 const exercises = computed(() => {
   return store.exercises ?? []
@@ -149,11 +186,6 @@ onMounted(() => {
   store.loadExercises()
 })
 
-const saveButtonDisabled = computed(() =>{
-  return !editedItem.name || editedItem.minCombo < 0
-    || editedItem.minElementsOfSameLevel < 0 || editedItem.minFemaleScore < 0
-    || editedItem.minMaleScore < 0 || editedItem.level < 0
-})
 const dialog = ref(false)
 
 const headers = ref([
@@ -235,32 +267,38 @@ const rule = (v: number) => v >= 0 || 'Отрицательные числа н�
       <v-card-text>
         <v-form @submit.prevent="save" :disabled="loadingDialog">
           <v-text-field
-            v-model="editedItem.name"
+            v-model="formData.name.value.value"
+            :error-messages="formData.name.errorMessage.value"
             label="Имя"
           ></v-text-field>
           <v-text-field
-            v-model="editedItem.level"
+            v-model="formData.level.value.value"
+            :error-messages="formData.level.errorMessage.value"
             type="number"
             label="Уровень"
           ></v-text-field>
           <v-text-field
-            v-model="editedItem.minCombo"
+            v-model="formData.minCombo.value.value"
+            :error-messages="formData.minCombo.errorMessage.value"
             type="number"
             label="Минимальное комбо"
           ></v-text-field>
           <v-text-field
-            v-model="editedItem.minElementsOfSameLevel"
+            v-model="formData.minElementsOfSameLevel.value.value"
+            :error-messages="formData.minElementsOfSameLevel.errorMessage.value"
             type="number"
             label="Минимальное количество элементов того же уровня"
           ></v-text-field>
           <v-text-field
-            v-model="editedItem.minFemaleScore"
+            v-model="formData.minFemaleScore.value.value"
+            :error-messages="formData.minFemaleScore.errorMessage.value"
             type="number"
             label="Минимальные очки для женщин"
           ></v-text-field>
 
           <v-text-field
-            v-model="editedItem.minMaleScore"
+            v-model="formData.minMaleScore.value.value"
+            :error-messages="formData.minMaleScore.errorMessage.value"
             type="number"
             label="Минимальные очки для мужчин"
           ></v-text-field>
@@ -269,24 +307,23 @@ const rule = (v: number) => v >= 0 || 'Отрицательные числа н�
             chips
             multiple
             label="Требуемые упражнения"
-            :model-value="editedItem.exerciseRequirementIds"
+            :model-value="editorState.exerciseRequirementIds"
             @update:model-value="updateExerciseRequirementIds"
             :items="exercises"
             item-title="name"
             item-value="id"
           ></v-select>
 
-          {{editedItem.exerciseRequirementIds}}
+          {{editorState.exerciseRequirementIds}}
 
           <v-list>
             <v-list-subheader title="Настройка требований упражнений"></v-list-subheader>
             <v-list-item
-              v-for="exercise in exercises.filter(ex => editedItem.exerciseRequirementIds.includes(ex.id))"
+              v-for="exercise in exercises.filter(ex => editorState.exerciseRequirementIds.includes(ex.id))"
               :key="exercise.id"
             >
               <v-text-field
-                :model-value="editedItem.exerciseRequirements[exercise.id]"
-                @update:model-value="value => editedItem.exerciseRequirements[exercise.id] = Number(value)"
+                v-model="editorState.exerciseRequirements[exercise.id]"
                 :rules="rule"
                 type="number"
                 :label="exercise.name"
@@ -301,7 +338,7 @@ const rule = (v: number) => v >= 0 || 'Отрицательные числа н�
         <v-btn color="red" variant="text" @click="dialog = false" :disabled="loadingDialog">
           Отменить
         </v-btn>
-        <v-btn color="primary" variant="text" @click="save" :loading="loadingDialog" :disabled="saveButtonDisabled">
+        <v-btn color="primary" variant="text" @click="save" :loading="loadingDialog">
           Сохранить
         </v-btn>
       </v-card-actions>
