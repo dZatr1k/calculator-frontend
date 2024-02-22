@@ -14,8 +14,10 @@
     "core-js": "^3.34.0",
     "roboto-fontface": "*",
     "toastify-js": "^1.12.0",
+    "vee-validate": "^4.12.5",
     "vue": "^3.3.0",
-    "vuetify": "^3.0.0"
+    "vuetify": "^3.0.0",
+    "yup": "^1.3.3"
   },
   "devDependencies": {
     "@babel/types": "^7.23.0",
