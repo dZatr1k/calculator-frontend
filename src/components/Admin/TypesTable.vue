@@ -1,29 +1,38 @@
 <script setup lang="ts">
 import {computed, onMounted, reactive, ref} from "vue";
 import {handleError, useCalculatorStore} from "@/store/app";
-import {ElementTypeRequest, ElementTypeResponse} from "@/restAPI";
+import {ElementTypeRequest, ElementTypeResponse, ExerciseResponse} from "@/restAPI";
 import {validateText} from "@/validation";
+import {useFormSchema} from "@/forms";
+import * as yup from "yup";
 
 const loadingDialog = ref(false)
 
-interface EditingElementType {
-  id: number | null,
-  name: string
+const {form, formData, schema} = useFormSchema(yup.object({
+  name: yup.string()
+    .trim()
+    .required('Заполните имя')
+}))
+const {handleSubmit} = form
+
+interface EditorState {
+  id: number | null
 }
 
-const initialState: EditingElementType = {
-  id: null,
-  name: ''
+const initialEditorState: EditorState = {
+  id: null
 }
 
-const editedItem = reactive<EditingElementType>({...initialState})
+const editorState = reactive<EditorState>({...initialEditorState})
 
-const editItem = (item: ElementTypeResponse) => {
-  Object.assign(editedItem, item);
+const editItem = (item: ExerciseResponse) => {
+  formData.name.value.value = item.name
+
+  editorState.id = item.id
   dialog.value = true
 };
 
-const isEditing = computed(() => editedItem.id !== null)
+const isEditing = computed(() => editorState.id !== null)
 const deleteItem = async (item: ElementTypeResponse) => {
   await api?.adminDeleteElementType({
     elementTypeId: item.id!
@@ -32,20 +41,25 @@ const deleteItem = async (item: ElementTypeResponse) => {
 }
 
 const createItem = () => {
-  Object.assign(editedItem, initialState)
+  formData.name.value.value = ''
+
+  Object.assign(editorState, initialEditorState)
+
   dialog.value = true
 }
 
-const save = async () => {
+const save = handleSubmit(async rawValues => {
+  const values = schema.cast(rawValues)
+
   loadingDialog.value = true
   try {
     const requestBody: ElementTypeRequest = {
-      name: editedItem.name
+      name: values.name
     }
 
     if (isEditing.value) {
       await api?.adminUpdateElementType({
-        elementTypeId: editedItem.id!,
+        elementTypeId: editorState.id!,
         elementTypeRequest: requestBody
       })
     } else {
@@ -60,7 +74,7 @@ const save = async () => {
   } finally {
     loadingDialog.value = false
   }
-}
+})
 
 const types = computed(() => {
   return store.elementTypes ?? []
@@ -132,7 +146,8 @@ const headers = ref([
       <v-card-text>
         <v-form @submit.prevent="save" :disabled="loadingDialog">
           <v-text-field
-            v-model="editedItem.name"
+            v-model="formData.name.value.value"
+            :error-messages="formData.name.errorMessage.value"
             label="Имя"
             :rules="validateText"
           ></v-text-field>

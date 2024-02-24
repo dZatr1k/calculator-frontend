@@ -1,35 +1,53 @@
 <script setup lang="ts">
 import {computed, onMounted, reactive, ref} from "vue";
 import {handleError, useCalculatorStore} from "@/store/app";
-import {ElementRequest, ElementTypeResponse} from "@/restAPI";
+import {ElementRequest, ElementResponse} from "@/restAPI";
+import {useFormSchema} from "@/forms";
+import * as yup from "yup";
 
 const loadingDialog = ref(false)
 
-interface EditingElement {
-  id: number | null,
-  name: string,
-  level: number,
-  score: number,
-  type: number | null
+const {form, formData, schema} = useFormSchema(yup.object({
+  name: yup.string()
+    .trim()
+    .required('Заполните имя'),
+  level: yup.number()
+    .integer('Только целый числа')
+    .min(1,'Число должно быть >= 1')
+    .required()
+    .typeError('Некорректное число'),
+  score: yup.number()
+    .integer('Только целый числа')
+    .min(1,'Число должно быть >= 1')
+    .required()
+    .typeError('Некорректное число'),
+  type: yup.number()
+    .required('Выберите тип')
+}))
+const {handleSubmit} = form
+
+interface EditorState {
+  id: number | null
 }
 
-const initialState: EditingElement = {
-  id: null,
-  name: '',
-  level: 0,
-  score: 0,
-  type: null
+const initialEditorState: EditorState = {
+  id: null
 }
 
-const editedItem = reactive<EditingElement>({...initialState})
+const editorState = reactive<EditorState>({...initialEditorState})
 
-const editItem = (item: ElementTypeResponse) => {
-  Object.assign(editedItem, item);
+const editItem = (item: ElementResponse) => {
+  formData.name.value.value = item.name
+  formData.score.value.value = item.score
+  formData.level.value.value = item.level
+  formData.type.value.value = item.type.id
+
+  editorState.id = item.id
   dialog.value = true
 };
 
-const isEditing = computed(() => editedItem.id !== null)
-const deleteItem = async (item: ElementTypeResponse) => {
+const isEditing = computed(() => editorState.id !== null)
+const deleteItem = async (item: ElementResponse) => {
   await api?.adminDeleteElement({
     elementId: item.id!
   })
@@ -37,23 +55,27 @@ const deleteItem = async (item: ElementTypeResponse) => {
 }
 
 const createItem = () => {
-  Object.assign(editedItem, initialState)
+  formData.name.value.value = ''
+  formData.score.value.value = 1
+  formData.level.value.value = 1
+  formData.type.value.value = null
   dialog.value = true
 }
 
-const save = async () => {
+const save = handleSubmit(async rawValues => {
+  const values = schema.cast(rawValues)
   loadingDialog.value = true
   try {
     const requestBody: ElementRequest = {
-      name: editedItem.name,
-      level: editedItem.level,
-      score: editedItem.score,
-      typeId: editedItem.type!
+      name: values.name,
+      level: values.level,
+      score: values.score,
+      typeId: values.type!
     }
 
     if (isEditing.value) {
       await api?.adminUpdateElement({
-        elementId: editedItem.id!,
+        elementId: editorState.id!,
         elementRequest: requestBody
       })
     } else {
@@ -68,7 +90,7 @@ const save = async () => {
   } finally {
     loadingDialog.value = false
   }
-}
+})
 
 const elements = computed(() => {
   return store.elements ?? []
@@ -144,21 +166,25 @@ const headers = ref([
       <v-card-text>
         <v-form @submit.prevent="save" :disabled="loadingDialog">
           <v-text-field
-            v-model="editedItem.name"
+            v-model="formData.name.value.value"
+            :error-messages="formData.name.errorMessage.value"
             label="Имя"
           ></v-text-field>
           <v-text-field
-            v-model="editedItem.level"
+            v-model="formData.level.value.value"
+            :error-messages="formData.level.errorMessage.value"
             label="Уровень"
           ></v-text-field>
           <v-text-field
-            v-model="editedItem.score"
+            v-model="formData.score.value.value"
+            :error-messages="formData.score.errorMessage.value"
             label="Очки"
           ></v-text-field>
 
           <v-select
             label="Тип упражнения"
-            v-model="editedItem.type"
+            v-model="formData.type.value.value"
+            :error-messages="formData.type.errorMessage.value"
             :items="elementsType"
             item-title="name"
             item-value="id"

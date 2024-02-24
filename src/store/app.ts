@@ -4,6 +4,7 @@ import {ElementResponse, CategoryResponse, DefaultApi, ElementTypeResponse, Exer
 import {AuthorizationData, createApi, ErrorResponse} from "@/api";
 import {Combo} from "@/types";
 import Toastify from "toastify-js"
+import {computed} from "vue";
 
 const getErrorResponse = async (error: ResponseError) => {
   if (error?.response) {
@@ -76,12 +77,43 @@ export const useCalculatorStore = defineStore('apiData', {
 
     selectedCategory: null as CategoryResponse | null,
     combos: [[]] as Combo[],
-    gender: 'male' as 'male' | 'female'
+    gender: 'male' as 'male' | 'female',
+    elementsDict: new Map(),
+    creditElements: [] as ElementResponse[],
+    score: null as number | null
   }),
   getters: {
-    isAuthorized(state) {
-      return state.authData !== null
+    isAuthorized: (store) => store.authData !== null,
+    elementsDict: (store) => {
+      const elements = store.content?.elements ?? []
+      return new Map<number, ElementResponse>(elements.map(e => [e.id, e]))
+    },
+    creditElements(state) {
+      return this.combos.flatMap(elements => elements
+        .map(elementId => state.elementsDict.get(elementId))
+        .filter(element => state.selectedCategory!.level - 1 <= element.level
+          && state.selectedCategory!.level + 2 >= element.level))
+
+      // const elements = [] as ElementResponse[]
+      // state.combos.forEach(x => {
+      //   x.forEach(y =>{
+      //     const element = this.elementsDict.get(y)!
+      //     if(state.){
+      //       elements.push(element)
+      //     }
+      //   })
+      // })
+      // return elements
+    },
+    score(state){
+      let count = 0
+      this.creditElements.forEach(x => {
+        count += x.score
+      })
+
+      return count
     }
+
   },
   actions: {
     async loadContent(force: boolean = false) {

@@ -9,35 +9,38 @@ import "../../restAPI/apis/DefaultApi";
 import {handleError, useCalculatorStore} from "@/store/app";
 import {useFormSchema} from "@/forms";
 import * as yup from "yup";
-import {InferType, Schema} from "yup";
-import {FieldContext, useField} from "vee-validate";
 
 const loadingDialog = ref(false)
 
 const {form, formData, schema} = useFormSchema(yup.object({
   name: yup.string()
     .trim()
-    .required('sosi'),
+    .required('Заполните имя'),
   level: yup.number()
-    .integer()
-    .min(1)
-    .required('sosi'),
+    .integer('Только целый числа')
+    .min(1,'Число должно быть >= 1')
+    .required()
+    .typeError('Некорректное число'),
   minCombo: yup.number()
-    .integer()
-    .min(1)
-    .required('sosi'),
+    .integer('Только целый числа')
+    .min(1,'Число должно быть >= 1')
+    .required()
+    .typeError('Некорректное число'),
   minElementsOfSameLevel: yup.number()
-    .integer()
-    .min(1)
-    .required('sosi'),
+    .integer('Только целый числа')
+    .min(1, 'Число должно быть >= 1')
+    .required()
+    .typeError('Некорректное число'),
   minFemaleScore: yup.number()
-    .integer()
-    .min(1)
-    .required('sosi'),
+    .integer('Только целый числа')
+    .min(1,'Число должно быть >= 1')
+    .required()
+    .typeError('Некорректное число'),
   minMaleScore: yup.number()
-    .integer()
-    .min(1)
-    .required('sosi'),
+    .integer('Только целый числа')
+    .min(1,'Число должно быть >= 1')
+    .required()
+    .typeError('Некорректное число'),
 }))
 const {handleSubmit} = form
 
@@ -48,7 +51,7 @@ interface EditorState {
   exerciseRequirements: Record<number, number>,
 }
 const initialEditorState: EditorState = {
-  id: 0,
+  id: null,
   initialExerciseRequirementIds: [],
   exerciseRequirementIds: [],
   exerciseRequirements: {},
@@ -70,8 +73,6 @@ const editItem = (item: CategoryResponse) => {
   editorState.exerciseRequirements = Object.fromEntries(item.exerciseRequirements.map(it => {
     return [it.exercise.id, it.count];
   }))
-
-  console.info(editorState.exerciseRequirements)
 
   dialog.value = true
 };
@@ -111,12 +112,6 @@ const updateExerciseRequirementIds = (value: number[]) => {
 const save = handleSubmit(async rawValues => {
   const values = schema.cast(rawValues)
 
-  // Array.from(Object.values(editorState.exerciseRequirements)).map(async it => {
-  //   await it.validate()
-  //   console.log(it.value.value)
-  //   console.log(await it.validate())
-  // })
-
   loadingDialog.value = true
   try {
     const requestBody: CategoryRequest = {
@@ -155,7 +150,7 @@ const save = handleSubmit(async rawValues => {
     await Promise.all(Object.entries(editorState.exerciseRequirements).map(([exerciseId, count]) => {
       return api?.adminSetExerciseRequirement({
         categoryId: response.id,
-        exerciseId,
+        exerciseId: Number(exerciseId),
         categoryExerciseRequirementRequest: {
           count
         }
@@ -313,8 +308,6 @@ const rule = (v: number) => v >= 0 || 'Отрицательные числа н�
             item-title="name"
             item-value="id"
           ></v-select>
-
-          {{editorState.exerciseRequirementIds}}
 
           <v-list>
             <v-list-subheader title="Настройка требований упражнений"></v-list-subheader>

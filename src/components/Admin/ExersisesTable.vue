@@ -2,27 +2,36 @@
 import {computed, onMounted, reactive, ref} from "vue";
 import {handleError, useCalculatorStore} from "@/store/app";
 import {ExerciseRequest, ExerciseResponse} from "@/restAPI";
+import {useFormSchema} from "@/forms";
+import * as yup from "yup";
 
 const loadingDialog = ref(false)
 
-interface EditingExersisesType {
-  id: number | null,
-  name: string
+const {form, formData, schema} = useFormSchema(yup.object({
+  name: yup.string()
+    .trim()
+    .required('Заполните имя')
+}))
+const {handleSubmit} = form
+
+interface EditorState {
+  id: number | null
 }
 
-const initialState: EditingExersisesType = {
-  id: null,
-  name: ''
+const initialEditorState: EditorState = {
+  id: null
 }
 
-const editedItem = reactive<EditingExersisesType>({...initialState})
+const editorState = reactive<EditorState>({...initialEditorState})
 
 const editItem = (item: ExerciseResponse) => {
-  Object.assign(editedItem, item);
+  formData.name.value.value = item.name
+
+  editorState.id = item.id
   dialog.value = true
 };
 
-const isEditing = computed(() => editedItem.id !== null)
+const isEditing = computed(() => editorState.id !== null)
 const deleteItem = async (item: ExerciseResponse) => {
   await api?.adminDeleteExercise({
     exerciseId: item.id!
@@ -32,20 +41,24 @@ const deleteItem = async (item: ExerciseResponse) => {
 }
 
 const createItem = () => {
-  Object.assign(editedItem, initialState)
+  formData.name.value.value = ''
+
+  Object.assign(editorState, initialEditorState)
+
   dialog.value = true
 }
 
-const save = async () => {
+const save = handleSubmit(async rawValues => {
+  const values = schema.cast(rawValues)
   loadingDialog.value = true
   try {
     const requestBody: ExerciseRequest = {
-      name: editedItem.name
+      name: values.name
     }
 
     if (isEditing.value) {
       await api?.adminUpdateExercise({
-        exerciseId: editedItem.id!,
+        exerciseId: editorState.id!,
         exerciseRequest: requestBody
       })
     } else {
@@ -61,7 +74,7 @@ const save = async () => {
   } finally {
     loadingDialog.value = false
   }
-}
+})
 
 const exercises = computed(() => {
   return store.exercises ?? []
@@ -133,7 +146,8 @@ const headers = ref([
       <v-card-text>
         <v-form @submit.prevent="save" :disabled="loadingDialog">
           <v-text-field
-            v-model="editedItem.name"
+            v-model="formData.name.value.value"
+            :error-messages="formData.name.errorMessage.value"
             label="Имя"
           ></v-text-field>
         </v-form>

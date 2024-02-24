@@ -8,7 +8,7 @@ const model = defineModel<Combo>()
 
 const items = computed(() => store.content?.elements ?? [])
 
-const updateElement = (i: number, item: string | null) => {
+const updateElement = (i: number, item: number | null) => {
 
 }
 
@@ -25,7 +25,6 @@ const updateElement = (i: number, item: string | null) => {
     clearable=""
   />
   <v-select
-    @update:model-value="value => model.push(value)"
     :model-value="null"
     :items="items"
     item-value="id"
